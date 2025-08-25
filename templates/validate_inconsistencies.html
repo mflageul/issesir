@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation des Incohérences - Application RCBT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons@4.28.0/dist/feather.css">
+    <style>
+        :root {
+            --rcbt-primary: #2c5aa0;
+            --rcbt-secondary: #f39c12;
+            --rcbt-success: #27ae60;
+            --rcbt-warning: #e67e22;
+            --rcbt-danger: #e74c3c;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--rcbt-primary), var(--rcbt-secondary));
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .inconsistency-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .inconsistency-header {
+            background: #fff3cd;
+            padding: 15px;
+            border-bottom: 1px solid #ffeaa7;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        
+        .inconsistency-body {
+            padding: 20px;
+        }
+        
+        .original-rating {
+            display: inline-block;
+            padding: 8px 15px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 1.1em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        /* CORRECTION: Couleurs selon l'évaluation client */
+        .rating-très-satisfaisant { background: #155724; color: white; } /* Vert foncé */
+        .rating-satisfaisant { background: #28a745; color: white; }      /* Vert clair */
+        .rating-peu-satisfaisant { background: #fd7e14; color: white; }  /* Orange */
+        .rating-très-peu-satisfaisant { background: #dc3545; color: white; } /* Rouge */
+        
+        /* Compatibilité avec les anciennes classes */
+        .rating-très-peu { background: #dc3545; color: white; }
+        .rating-peu { background: #fd7e14; color: white; }
+        .rating-très { background: #155724; color: white; }
+        
+        .comment-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid var(--rcbt-primary);
+            margin: 15px 0;
+            font-style: italic;
+        }
+        
+        .detected-words {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin: 10px 0;
+        }
+        
+        .word-tag {
+            background: var(--rcbt-secondary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+        
+        .suggestion-box {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        
+        .validation-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .progress-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .btn-validate {
+            background: var(--rcbt-success);
+            border-color: var(--rcbt-success);
+        }
+        
+        .btn-ignore {
+            background: var(--rcbt-warning);
+            border-color: var(--rcbt-warning);
+        }
+        
+        .btn-custom-rating {
+            background: var(--rcbt-primary);
+            border-color: var(--rcbt-primary);
+        }
+        
+        .validated-item {
+            opacity: 0.7;
+            background: #f8f9fa;
+        }
+        
+        .validation-status {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+        }
+        
+        .status-validated { background: #d4edda; color: #155724; }
+        .status-ignored { background: #fff3cd; color: #856404; }
+        .status-pending { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i data-feather="alert-triangle"></i> Validation des Incohérences</h1>
+        <p class="mb-0">Traitement manuel des enquêtes avec incohérences détectées</p>
+    </div>
+    
+    <div class="container">
+        <!-- Résumé des validations -->
+        <div class="progress-summary">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-primary">{{ summary.total_detected }}</h3>
+                        <p class="mb-0">Incohérences détectées</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-success">{{ summary.validated_corrected }}</h3>
+                        <p class="mb-0">Corrigées</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-warning">{{ summary.validated_ignored }}</h3>
+                        <p class="mb-0">Ignorées</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-danger">{{ summary.pending_validation }}</h3>
+                        <p class="mb-0">En attente</p>
+                    </div>
+                </div>
+            </div>
+            <div class="progress mt-3">
+                <div class="progress-bar bg-success" role="progressbar" 
+                     style="width: {{ summary.completion_rate }}%">
+                    {{ summary.completion_rate }}% traité
+                </div>
+            </div>
+        </div>
+        
+        <!-- Actions principales -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <button class="btn btn-success btn-lg w-100" onclick="generateFinalReports()" 
+                        {% if summary.pending_validation > 0 %}disabled{% endif %}>
+                    <i data-feather="check-circle"></i> 
+                    Générer les Rapports Finaux
+                    {% if summary.pending_validation > 0 %}
+                        <small class="d-block">{{ summary.pending_validation }} incohérences restantes</small>
+                    {% endif %}
+                </button>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-secondary btn-lg w-100" onclick="exportValidationLog()">
+                    <i data-feather="download"></i> Exporter le Log de Validation
+                </button>
+            </div>
+        </div>
+        
+        <!-- Liste des incohérences -->
+        <h2 class="mb-4">Incohérences à traiter ({{ inconsistencies|length }})</h2>
+        
+        {% for inc in inconsistencies %}
+        <div class="inconsistency-card {% if inc.validation_status != 'pending' %}validated-item{% endif %}" 
+             id="inconsistency-{{ inc.dossier }}">
+             
+            <div class="inconsistency-header">
+                <div>
+                    <strong>Dossier {{ inc.dossier }}</strong> - {{ inc.collaborator }}
+                    <span class="validation-status status-{{ inc.validation_status }}">
+                        {% if inc.validation_status == 'pending' %}En attente
+                        {% elif inc.validation_status == 'validated' %}Validé
+                        {% else %}Ignoré
+                        {% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="badge bg-warning">⚠️ {{ inc.inconsistency_type }}</span>
+                </div>
+            </div>
+            
+            <div class="inconsistency-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Note client actuelle:</h6>
+                        <span class="original-rating rating-{{ inc.original_rating|lower|replace(' ', '-') }}">
+                            {{ inc.original_rating }}
+                        </span>
+                        
+                        <h6 class="mt-3">Mots détectés:</h6>
+                        <div class="detected-words">
+                            {% for word in inc.detected_words %}
+                            <span class="word-tag">{{ word }}</span>
+                            {% endfor %}
+                        </div>
+                        
+                        {% if inc.validated_rating and inc.validation_status != 'pending' %}
+                        <div class="mt-3">
+                            <h6>Action appliquée:</h6>
+                            <div class="alert alert-info">
+                                <strong>{{ inc.validated_rating }}</strong>
+                                {% if inc.validation_reason %}
+                                <br><small>Raison: {{ inc.validation_reason }}</small>
+                                {% endif %}
+                                <br><small>Par {{ inc.validator }} le {{ inc.validation_date }}</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Commentaire client:</h6>
+                        <div class="comment-box">
+                            "{{ inc.comment[:200] }}{% if inc.comment|length > 200 %}..."{% endif %}"
+                        </div>
+                        
+                        {% if inc.validation_status == 'pending' %}
+                        <div class="suggestion-box">
+                            <h6><i data-feather="lightbulb"></i> Suggestion système:</h6>
+                            <p class="mb-0">
+                                Basé sur l'analyse, suggéré: 
+                                <strong class="text-primary">{{ inc.suggested_rating }}</strong>
+                            </p>
+                        </div>
+                        
+                        <div class="validation-actions">
+                            <button class="btn btn-validate text-white" 
+                                    onclick="validateInconsistency('{{ inc.dossier }}', '{{ inc.suggested_rating }}')">
+                                <i data-feather="check"></i> Appliquer suggestion
+                            </button>
+                            
+                            <button class="btn btn-ignore text-white" 
+                                    onclick="ignoreInconsistency('{{ inc.dossier }}')">
+                                <i data-feather="x"></i> Conserver original
+                            </button>
+                            
+                            <div class="dropdown d-inline">
+                                <button class="btn btn-custom-rating text-white dropdown-toggle" 
+                                        type="button" data-bs-toggle="dropdown">
+                                    <i data-feather="edit"></i> Autre correction
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" 
+                                           onclick="customValidation('{{ inc.dossier }}', 'Très satisfaisant')">Très satisfaisant</a></li>
+                                    <li><a class="dropdown-item" href="#" 
+                                           onclick="customValidation('{{ inc.dossier }}', 'Satisfaisant')">Satisfaisant</a></li>
+                                    <li><a class="dropdown-item" href="#" 
+                                           onclick="customValidation('{{ inc.dossier }}', 'Peu satisfaisant')">Peu satisfaisant</a></li>
+                                    <li><a class="dropdown-item" href="#" 
+                                           onclick="customValidation('{{ inc.dossier }}', 'Très peu satisfaisant')">Très peu satisfaisant</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if inconsistencies|length == 0 %}
+        <div class="alert alert-success text-center">
+            <h4><i data-feather="check-circle"></i> Toutes les incohérences ont été traitées !</h4>
+            <p class="mb-0">Vous pouvez maintenant générer les rapports finaux.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <script>
+        feather.replace();
+        
+        // AMÉLIORATION: Messages sans "localhost:5000"
+        function showValidationMessage(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            toast.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.parentNode && toast.parentNode.removeChild(toast), 5000);
+        }
+        
+        function validateInconsistency(dossier, rating) {
+            const reason = prompt(`✅ Validation d'incohérence\n\nConfirmer la correction du dossier ${dossier} vers "${rating}".\n\nRaison (optionnelle):`);
+            if (reason !== null) {
+                submitValidation(dossier, rating, reason);
+            }
+        }
+        
+        function ignoreInconsistency(dossier) {
+            const reason = prompt(`❌ Ignorer l'incohérence\n\nConfirmer l'ignorance de l'incohérence pour le dossier ${dossier}.\n\nRaison (optionnelle):`);
+            if (reason !== null) {
+                submitIgnore(dossier, reason);
+            }
+        }
+        
+        function customValidation(dossier, rating) {
+            const reason = prompt(`🔧 Correction manuelle\n\nCorrection manuelle du dossier ${dossier} vers "${rating}".\n\nRaison (optionnelle):`);
+            if (reason !== null) {
+                submitValidation(dossier, rating, reason);
+            }
+        }
+        
+        function submitValidation(dossier, rating, reason) {
+            fetch('/validate_inconsistency', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dossier: dossier,
+                    validated_rating: rating,
+                    reason: reason
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    showValidationMessage('❌ Erreur: ' + data.error, 'error');
+                }
+            });
+        }
+        
+        function submitIgnore(dossier, reason) {
+            fetch('/ignore_inconsistency', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dossier: dossier,
+                    reason: reason
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    showValidationMessage('❌ Erreur: ' + data.error, 'error');
+                }
+            });
+        }
+        
+        function generateFinalReports() {
+            if (confirm('📊 Génération des rapports finaux\n\nGénérer les rapports finaux avec les validations appliquées ?')) {
+                window.location.href = '/generate_final_reports';
+            }
+        }
+        
+        function exportValidationLog() {
+            window.location.href = '/export_validation_log';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation Terminée - Application RCBT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons@4.28.0/dist/feather.css">
+    <style>
+        :root {
+            --rcbt-primary: #2c5aa0;
+            --rcbt-secondary: #f39c12;
+            --rcbt-success: #27ae60;
+        }
+        
+        .success-header {
+            background: linear-gradient(135deg, var(--rcbt-success), var(--rcbt-primary));
+            color: white;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .success-card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .validation-summary {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .btn-download {
+            background: var(--rcbt-primary);
+            border-color: var(--rcbt-primary);
+            padding: 12px 24px;
+            font-size: 1.1em;
+        }
+        
+        .btn-home {
+            background: var(--rcbt-secondary);
+            border-color: var(--rcbt-secondary);
+            padding: 12px 24px;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-header">
+        <h1><i data-feather="check-circle"></i> Validation Terminée !</h1>
+        <p class="mb-0">Les incohérences ont été traitées et le rapport final généré avec succès</p>
+    </div>
+    
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="success-card">
+                    <div class="validation-summary">
+                        <h4><i data-feather="check"></i> Résumé des validations</h4>
+                        <div class="row mt-3">
+                            <div class="col-md-4 text-center">
+                                <h3 class="text-primary">{{ summary.total_detected }}</h3>
+                                <p class="mb-0">Incohérences détectées</p>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <h3 class="text-success">{{ summary.validated_corrected }}</h3>
+                                <p class="mb-0">Corrigées</p>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <h3 class="text-warning">{{ summary.validated_ignored }}</h3>
+                                <p class="mb-0">Conservées</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success" role="alert">
+                        <h5><i data-feather="file-text"></i> Rapport Final Généré</h5>
+                        <p class="mb-0">
+                            Le rapport final a été généré en prenant en compte toutes vos validations.
+                            Les tickets modifiés conservent leur badge ⚠️ pour maintenir la traçabilité.
+                        </p>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                        {% if report_path %}
+                        <a href="/download_report/{{ report_path|urlencode }}" 
+                           class="btn btn-download btn-primary text-white me-md-2">
+                            <i data-feather="download"></i> Télécharger le Rapport Final
+                        </a>
+                        {% endif %}
+                        
+                        <a href="/" class="btn btn-home btn-warning text-white" onclick="sessionStorage.setItem('validation_completed', 'true')">
+                            <i data-feather="home"></i> Retour à l'Accueil
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-4">
+                    <small class="text-muted">
+                        Application RCBT by Q&T - Validation des incohérences terminée le {{ validation_date }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script>feather.replace();</script>
+</body>
+</html>

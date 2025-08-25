@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application ISESIR by Q&T - Analyse des enquêtes de satisfaction</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/feather-icons@4.29.0/dist/feather.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <div class="d-flex align-items-center">
+                <img id="logo" src="{{ url_for('static', filename='images/logo.png') }}" 
+                     alt="Logo RCBT" class="me-3 logo-navbar" style="display: none;">
+                <div>
+                    <span class="navbar-brand mb-0 h1">Application ISESIR by <img src="{{ url_for('static', filename='images/logo_qt.jpg') }}" alt="Q&T" style="height: 28px; vertical-align: middle; margin-left: 4px;"></span>
+                    <small class="text-light d-block">Analyse des enquêtes de satisfaction v2.0</small>
+                </div>
+            </div>
+            <div>
+                <button class="btn btn-outline-light me-2" onclick="showHistory()">
+                    <i data-feather="clock"></i> Historique
+                </button>
+
+                <button class="btn btn-outline-light" onclick="showUpdates()">
+                    <i data-feather="star"></i> Mises à jour
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Pending Inconsistencies Alert -->
+        {% if has_pending_validation %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i data-feather="alert-triangle"></i>
+            <strong>Incohérences en attente !</strong> 
+            Vous avez des incohérences détectées qui nécessitent une validation avant de pouvoir générer des rapports individuels fiables.
+            <a href="/validate_inconsistencies" class="btn btn-sm btn-outline-dark ms-2">
+                <i data-feather="check-square"></i>
+                Valider maintenant
+            </a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <!-- File Upload Section -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i data-feather="folder"></i>
+                    Sélection des fichiers Excel
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if files_loaded %}
+                    <div class="alert alert-success" role="alert">
+                        <i data-feather="check-circle"></i> Fichiers disponibles pour rapports individuels
+                    </div>
+                {% endif %}
+                {% if session_restored %}
+                    <div class="alert alert-info" role="alert">
+                        <i data-feather="refresh-cw"></i> Session restaurée automatiquement
+                    </div>
+                {% endif %}
+                <form id="uploadForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i data-feather="file-text"></i>
+                                1. Fichier enquêtes (asmt_metric_result.xlsx)
+                            </label>
+                            <input type="file" class="form-control" id="enq_file" name="enq_file" 
+                                   accept=".xlsx,.xls" required>
+                            <div class="form-text">Données des enquêtes de satisfaction</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i data-feather="layers"></i>
+                                2. Fichier tickets (sn_customerservice_case.xlsx)
+                            </label>
+                            <input type="file" class="form-control" id="case_file" name="case_file" 
+                                   accept=".xlsx,.xls" required>
+                            <div class="form-text">Données des tickets de support</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i data-feather="users"></i>
+                                3. Fichier référence équipes (reference_equipes_sites.xlsx)
+                            </label>
+                            <input type="file" class="form-control" id="ref_file" name="ref_file" 
+                                   accept=".xlsx,.xls" required>
+                            <div class="form-text">Référentiel des équipes et sites</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i data-feather="user"></i>
+                                4. Fichier comptes clients (customer_account.xlsx)
+                            </label>
+                            <input type="file" class="form-control" id="acct_file" name="acct_file" 
+                                   accept=".xlsx,.xls" required>
+                            <div class="form-text">Données des comptes clients</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary btn-lg me-3">
+                                <i data-feather="upload"></i>
+                                Télécharger les fichiers
+                            </button>
+                            <button type="button" id="generateBtn" class="btn btn-success btn-lg" disabled>
+                                <i data-feather="file-plus"></i>
+                                Générer le rapport amélioré
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="card shadow-sm mt-4" id="progressSection" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i data-feather="activity"></i>
+                    Progression
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="progressText">Initialisation...</div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="card shadow-sm mt-4" id="resultsSection" style="display: none;">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i data-feather="check-circle"></i>
+                    Résultats de l'analyse
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="metricsPreview"></div>
+                <div class="mt-3">
+                    <button id="downloadBtn" class="btn btn-primary">
+                        <i data-feather="download"></i>
+                        Télécharger le rapport HTML
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Individual Reports Section -->
+        <div class="card shadow-sm mt-4" id="individualReportsSection" style="display: none;">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i data-feather="user"></i>
+                    Rapports individuels
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Type de rapport</label>
+                        <select class="form-select" id="reportType">
+                            <option value="">Sélectionner le type</option>
+                            <option value="site">Par site</option>
+                            <option value="collaborator">Par collaborateur</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Sélection</label>
+                        <select class="form-select" id="reportTarget" disabled>
+                            <option value="">Choisir d'abord le type</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button id="generateIndividualBtn" class="btn btn-success w-100" disabled>
+                            <i data-feather="file-plus"></i>
+                            Générer
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-3" id="individualProgress" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="mt-2"><span id="individualProgressText">Génération en cours...</span></div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- Log Section -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i data-feather="terminal"></i>
+                    Journal d'exécution
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="logOutput" class="log-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i data-feather="clock"></i>
+                        Historique des rapports
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Filtre</th>
+                                    <th>Fichier</th>
+                                    <th>Total Tickets</th>
+                                    <th>Nb réponses Q1</th>
+                                    <th>Taux Clôture</th>
+                                    <th>Taux Satisfaction</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-2">Application conçue et développée par le pôle Q&T de la DESIR RCBT</p>
+            <p class="mb-0 small">
+                <a href="#" onclick="showContact()" style="color: #007bff; text-decoration: underline;">
+                    En cas d'évolutions ou anomalies, contactez-nous
+                </a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Updates Modal -->
+    <div class="modal fade" id="updatesModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">
+                        <i data-feather="star"></i>
+                        Historique des mises à jour
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-date">13/08/2025</div>
+                            <div class="timeline-content">
+                                <h6 class="fw-bold">🔧 FINALISATION PROFESSIONNELLE - ISESIR</h6>
+                                <ul class="mb-0">
+                                    <li>✅ Rebranding complet: "RCBT" → "ISESIR by Pole QoS et Transformation SI Retail"</li>
+                                    <li>✅ Messages de démarrage professionnels avec hiérarchie organisationnelle complète</li>
+                                    <li>✅ Correction erreur WERKZEUG_SERVER_FD - lancement sans erreur</li>
+                                    <li>✅ Correction erreur base de données "nb_reponses_q1" dans historique</li>
+                                    <li>✅ Interface utilisateur: "satisfaction boutiques" au lieu de "client"</li>
+                                    <li>✅ Contact technique: Flageul Martin - Direction Exploitation et SI Retail</li>
+                                    <li>✅ Scripts de lancement Windows (.bat) optimisés et professionnalisés</li>
+                                    <li>🎯 Application ISESIR prête pour déploiement final</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">11/08/2025</div>
+                            <div class="timeline-content">
+                                <h6 class="fw-bold">🚀 VERSION FINALE - FIABILISATION COMPLÈTE</h6>
+                                <ul class="mb-0">
+                                    <li>✅ Système fiabilisation tickets orphelins (358 tickets "Autres")</li>
+                                    <li>✅ Attribution automatique collaborateur ET site avec traçabilité</li>
+                                    <li>✅ Page 4 corrigée: analyse TOUTES enquêtes Q1 (avec/sans commentaires)</li>
+                                    <li>✅ Suppression limitation ≥5 réponses pour analyse complète</li>
+                                    <li>✅ Interface nettoyée: bouton téléchargement supprimé</li>
+                                    <li>🎯 Application prête pour déploiement production</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">08/08/2025</div>
+                            <div class="timeline-content">
+                                <h6 class="fw-bold">🆕 Rapports individuels + Correction taux retour</h6>
+                                <ul class="mb-0">
+                                    <li>✅ Fonctionnalité rapports individuels par site/collaborateur</li>
+                                    <li>✅ Interface sélection dynamique avec données réelles</li>
+                                    <li>🔧 Correction critique: taux retour collaborateurs (100% → réel)</li>
+                                    <li>🔧 Debug ajouté pour surveillance calculs</li>
+                                    <li>📝 Historique automatique des évolutions majeures</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">08/08/2025 - Matin</div>
+                            <div class="timeline-content">
+                                <h6 class="fw-bold">Finalisation interface et branding</h6>
+                                <ul class="mb-0">
+                                    <li>Intégration logo Q&T dans l'application et rapports</li>
+                                    <li>Changement titre: "Application ISESIR by Q&T"</li>
+                                    <li>Ajout footer avec contact développeur</li>
+                                    <li>Centralisation historique mises à jour</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">07/08/2025</div>
+                            <div class="timeline-content">
+                                <h6 class="fw-bold">Harmonisation calculs et colorisation</h6>
+                                <ul class="mb-0">
+                                    <li>Taux de retour cohérents (collaborateurs = boutiques)</li>
+                                    <li>Page 2: % enquêtes avec commentaires par collaborateur</li>
+                                    <li>Page 6: Liste boutiques jamais répondu</li>
+                                    <li>Page 7: Colorisation selon objectif ≥13%</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">06/08/2025</div>
+                            <div class="timeline-content">
+                                <h6 class="fw-bold">Passage format HTML interactif</h6>
+                                <ul class="mb-0">
+                                    <li>Remplacement PDF par HTML responsive</li>
+                                    <li>Rapports individuels par site/collaborateur</li>
+                                    <li>Tableaux filtres et tri</li>
+                                    <li>Navigation 7 pages avec onglets</li>
+                                    <li>Graphiques en secteurs avec pourcentages</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact Modal -->
+    <div class="modal fade" id="contactModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i data-feather="mail"></i>
+                        Contact développeur
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="mb-3">
+                        <i data-feather="user" class="text-primary" style="width: 48px; height: 48px;"></i>
+                    </div>
+                    <h6 class="fw-bold">Flageul Martin</h6>
+                    <p class="text-muted">Développeur - Pôle Q&T DESIR RCBT</p>
+                    <a href="mailto:mflageul@rcbt.fr" class="btn btn-primary">
+                        <i data-feather="mail" class="me-2"></i>
+                        mflageul@rcbt.fr
+                    </a>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            Pour toute évolution, correction ou anomalie de l'application
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.0/dist/feather.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
